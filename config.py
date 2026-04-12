@@ -8,5 +8,6 @@ PHONE_NUMBER = '+251991181138'
 
 # MongoDB Configuration
 # Default to localhost if MONGO_URI is not set in environment
-MONGO_URI = os.getenv('MONGO_URI', 'mongodb+srv://eliassisaynega_db_user:x9aUrWYrO6ehIBDQ@pharma.xbx5axb.mongodb.net/?appName=pharma')
+# MONGO_URI = os.getenv('MONGO_URI', 'mongodb+srv://eliassisaynega_db_user:x9aUrWYrO6ehIBDQ@pharma.xbx5axb.mongodb.net/?appName=pharma')
 DB_NAME = 'telegram_multi_sender'
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb+srv://eliassisaydev_db_user:MZYldEzKCWGutjZq@pharma.ofeigvv.mongodb.net/?appName=pharma')

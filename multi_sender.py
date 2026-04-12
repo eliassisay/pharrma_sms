@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from telethon import TelegramClient, events, errors, types
+from telethon import TelegramClient, events, errors, types, functions
 from config import API_ID, API_HASH, PHONE_NUMBER
 import database
 
@@ -138,18 +138,33 @@ async def group_handler(event):
     if not is_allowed_chat(event): return
     args = event.message.text.split()
     if len(args) < 2:
-        return await event.respond("Usage: /load_group @group_username")
+        return await event.respond("Usage: /load_group @group_username OR https://t.me/link")
     
-    group_entity = args[1]
-    status = await event.respond(f"Loading members from {group_entity}...")
+    group_input = args[1]
+    status = await event.respond(f"🔍 Accessing group: {group_input}...")
     try:
+        # Try to resolve based on common patterns
+        if 't.me/+' in group_input or 't.me/joinchat/' in group_input:
+            # Handle private invite links
+            hash = group_input.split('/')[-1].replace('+', '')
+            try:
+                # Try to join first (required to see participants in private groups)
+                await client(functions.messages.ImportChatInviteRequest(hash))
+                group_entity = await client.get_entity(group_input)
+            except errors.UserAlreadyParticipantError:
+                group_entity = await client.get_entity(group_input)
+        else:
+            # Handle usernames or public links
+            group_entity = await client.get_entity(group_input)
+
         count = 0
         async for user in client.iter_participants(group_entity):
             if not user.bot:
                 await database.add_user(user.id, user.username, f"{user.first_name or ''} {user.last_name or ''}".strip())
                 count += 1
-        await status.edit(f"✅ Loaded {count} members from {group_entity}.")
+        await status.edit(f"✅ Loaded {count} members from {group_entity.title if hasattr(group_entity, 'title') else group_input}.")
     except Exception as e:
+        logger.error(f"Error loading group: {e}")
         await status.edit(f"❌ Error: {str(e)}")
 
 @client.on(events.NewMessage(pattern='/broadcast', from_users='me'))
