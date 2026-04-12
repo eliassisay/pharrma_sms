@@ -1,0 +1,5 @@
+telethon
+motor
+cryptography
+dnspython
+certifi
