@@ -1,13 +1,18 @@
 import os
+from dotenv import load_dotenv
+
+# Load .env file for local development
+load_dotenv()
 
 # Telegram API Credentials
 # Get these from https://my.telegram.org
-API_ID = 36530300
-API_HASH = '4515566e294d0313e501cf5a08dd1a79'
-PHONE_NUMBER = '+251980027967'
+API_ID = int(os.getenv('API_ID', '36530300'))
+API_HASH = os.getenv('API_HASH', '4515566e294d0313e501cf5a08dd1a79')
+PHONE_NUMBER = os.getenv('PHONE_NUMBER', '+251980027967')
 
 # MongoDB Configuration
-# Default to localhost if MONGO_URI is not set in environment
-# MONGO_URI = os.getenv('MONGO_URI', 'mongodb+srv://eliassisaynega_db_user:x9aUrWYrO6ehIBDQ@pharma.xbx5axb.mongodb.net/?appName=pharma')
-DB_NAME = 'telegram_multi_sender'
 MONGO_URI = os.getenv('MONGO_URI', 'mongodb+srv://eliassisaydev_db_user:MZYldEzKCWGutjZq@pharma.ofeigvv.mongodb.net/?appName=pharma')
+DB_NAME = os.getenv('DB_NAME', 'telegram_multi_sender')
+
+# Telegram Session Management (Used for cloud deployment)
+STRING_SESSION = os.getenv('STRING_SESSION')

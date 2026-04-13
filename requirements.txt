@@ -3,3 +3,4 @@ motor
 cryptography
 dnspython
 certifi
+python-dotenv

@@ -1,7 +1,8 @@
 import asyncio
 import logging
 from telethon import TelegramClient, events, errors, types, functions
-from config import API_ID, API_HASH, PHONE_NUMBER
+from telethon.sessions import StringSession
+from config import API_ID, API_HASH, PHONE_NUMBER, STRING_SESSION
 import database
 
 # Configure logging
@@ -9,7 +10,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 # Initialize Telethon Client
-client = TelegramClient('multi_sender_session', API_ID, API_HASH)
+session = StringSession(STRING_SESSION) if STRING_SESSION else 'multi_sender_session'
+client = TelegramClient(session, API_ID, API_HASH)
 
 HELP_TEXT = """
 **Multi-Sender Userbot Commands:**
