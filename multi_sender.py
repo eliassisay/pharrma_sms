@@ -1,5 +1,8 @@
 import asyncio
 import logging
+import threading
+import os
+from flask import Flask
 from telethon import TelegramClient, events, errors, types, functions
 from telethon.sessions import StringSession
 from config import API_ID, API_HASH, PHONE_NUMBER, STRING_SESSION
@@ -224,7 +227,22 @@ async def broadcast_handler(event):
         final_report += "\nCheck MongoDB logs for details."
     await confirm.edit(final_report)
 
+# --- Minimal Web Server for Health Checks ---
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    return "Bot is running!", 200
+
+def run_flask():
+    # Koyeb/Render provide the PORT environment variable
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
 async def main():
+    logger.info("Starting Health Check server...")
+    threading.Thread(target=run_flask, daemon=True).start()
+    
     logger.info("Starting Multi-Sender Userbot...")
     
     if not await database.check_connection():

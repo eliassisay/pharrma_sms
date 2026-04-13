@@ -4,3 +4,4 @@ cryptography
 dnspython
 certifi
 python-dotenv
+flask
