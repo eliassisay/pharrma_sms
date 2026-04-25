@@ -2,20 +2,20 @@ import asyncio
 import logging
 import threading
 import os
+import sys
 from flask import Flask
 from telethon import TelegramClient, events, errors, types, functions
 from telethon.sessions import StringSession
 from config import API_ID, API_HASH, PHONE_NUMBER, STRING_SESSION
 import database
-import sys
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Initialize Telethon Client
+# Globals
+client = None
 session = StringSession(STRING_SESSION) if STRING_SESSION else 'multi_sender_session'
-client = TelegramClient(session, API_ID, API_HASH)
 
 HELP_TEXT = """
 **Multi-Sender Userbot Commands:**
@@ -41,20 +41,16 @@ async def get_user_details(client, entity):
     return None, None, None
 
 def is_allowed_chat(event):
-    # Allow commands in any private chat (Saved Messages OR your chat with the bot)
     return event.is_private
 
-@client.on(events.NewMessage(pattern='/start', from_users='me'))
 async def start_handler(event):
     if not is_allowed_chat(event): return
     await event.respond("✅ Multi-Sender Userbot is active. Type /help to see commands.")
 
-@client.on(events.NewMessage(pattern='/help', from_users='me'))
 async def help_handler(event):
     if not is_allowed_chat(event): return
     await event.respond(HELP_TEXT)
 
-@client.on(events.NewMessage(pattern='/add', from_users='me'))
 async def add_handler(event):
     if not is_allowed_chat(event): return
     args = event.message.text.split()[1:]
@@ -64,7 +60,7 @@ async def add_handler(event):
     added = []
     failed = []
     for arg in args:
-        uid, username, name = await get_user_details(client, arg)
+        uid, username, name = await get_user_details(event.client, arg)
         if uid:
             await database.add_user(uid, username, name)
             added.append(f"{name or username or uid}")
@@ -78,7 +74,6 @@ async def add_handler(event):
         response += f"❌ Failed to find: {', '.join(failed)}"
     await event.respond(response or "No users found.")
 
-@client.on(events.NewMessage(pattern='/remove', from_users='me'))
 async def remove_handler(event):
     if not is_allowed_chat(event): return
     args = event.message.text.split()[1:]
@@ -100,7 +95,6 @@ async def remove_handler(event):
     
     await event.respond(f"✅ Removed: {', '.join(removed)}" if removed else "None removed.")
 
-@client.on(events.NewMessage(pattern='/list', from_users='me'))
 async def list_handler(event):
     if not is_allowed_chat(event): return
     users = await database.get_all_users()
@@ -118,18 +112,16 @@ async def list_handler(event):
     else:
         await event.respond(msg)
 
-@client.on(events.NewMessage(pattern='/clear', from_users='me'))
 async def clear_handler(event):
     if not is_allowed_chat(event): return
     await database.clear_users()
     await event.respond("✅ Selection list cleared.")
 
-@client.on(events.NewMessage(pattern='/load_contacts', from_users='me'))
 async def contacts_handler(event):
     if not is_allowed_chat(event): return
     status = await event.respond("Loading contacts...")
     try:
-        contacts = await client.get_contacts()
+        contacts = await event.client.get_contacts()
         count = 0
         for c in contacts:
             if not c.bot:
@@ -139,7 +131,6 @@ async def contacts_handler(event):
     except Exception as e:
         await status.edit(f"❌ Error: {str(e)}")
 
-@client.on(events.NewMessage(pattern='/load_group', from_users='me'))
 async def group_handler(event):
     if not is_allowed_chat(event): return
     args = event.message.text.split()
@@ -149,22 +140,18 @@ async def group_handler(event):
     group_input = args[1]
     status = await event.respond(f"🔍 Accessing group: {group_input}...")
     try:
-        # Try to resolve based on common patterns
         if 't.me/+' in group_input or 't.me/joinchat/' in group_input:
-            # Handle private invite links
             hash = group_input.split('/')[-1].replace('+', '')
             try:
-                # Try to join first (required to see participants in private groups)
-                await client(functions.messages.ImportChatInviteRequest(hash))
-                group_entity = await client.get_entity(group_input)
+                await event.client(functions.messages.ImportChatInviteRequest(hash))
+                group_entity = await event.client.get_entity(group_input)
             except errors.UserAlreadyParticipantError:
-                group_entity = await client.get_entity(group_input)
+                group_entity = await event.client.get_entity(group_input)
         else:
-            # Handle usernames or public links
-            group_entity = await client.get_entity(group_input)
+            group_entity = await event.client.get_entity(group_input)
 
         count = 0
-        async for user in client.iter_participants(group_entity):
+        async for user in event.client.iter_participants(group_entity):
             if not user.bot:
                 await database.add_user(user.id, user.username, f"{user.first_name or ''} {user.last_name or ''}".strip())
                 count += 1
@@ -173,7 +160,6 @@ async def group_handler(event):
         logger.error(f"Error loading group: {e}")
         await status.edit(f"❌ Error: {str(e)}")
 
-@client.on(events.NewMessage(pattern='/broadcast', from_users='me'))
 async def broadcast_handler(event):
     if not is_allowed_chat(event): return
     
@@ -198,15 +184,14 @@ async def broadcast_handler(event):
     
     for u in selected_users:
         try:
-            # We send the message object directly (works for text and media)
-            await client.send_message(u['_id'], broadcast_msg)
+            await event.client.send_message(u['_id'], broadcast_msg)
             success += 1
-            await asyncio.sleep(1.5) # Anti-flood delay
+            await asyncio.sleep(1.5) 
         except errors.FloodWaitError as e:
             logger.warning(f"FloodWait: sleeping for {e.seconds} seconds")
             await asyncio.sleep(e.seconds)
             try:
-                await client.send_message(u['_id'], broadcast_msg)
+                await event.client.send_message(u['_id'], broadcast_msg)
                 success += 1
             except Exception as e2:
                 failed += 1
@@ -216,7 +201,6 @@ async def broadcast_handler(event):
             err_logs.append(f"User {u['_id']}: {str(e)}")
             logger.error(f"Failed to send to {u['_id']}: {e}")
             
-    # Log the summary
     preview = "Media/Reply"
     if isinstance(broadcast_msg, str): preview = broadcast_msg
     elif hasattr(broadcast_msg, 'text') and broadcast_msg.text: preview = broadcast_msg.text
@@ -236,11 +220,11 @@ def health_check():
     return "Bot is running!", 200
 
 def run_flask():
-    # Koyeb/Render provide the PORT environment variable
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
 async def main():
+    global client
     logger.info("Starting Health Check server...")
     try:
         threading.Thread(target=run_flask, daemon=True).start()
@@ -252,8 +236,21 @@ async def main():
         logger.critical("Could not connect to MongoDB. Please check your MONGO_URI and IP whitelist.")
         sys.exit(1)
 
-    logger.info("Starting Telegram Client...")
+    logger.info("Initializing Telegram Client...")
     try:
+        client = TelegramClient(session, API_ID, API_HASH)
+        
+        # Register Handlers
+        client.add_event_handler(start_handler, events.NewMessage(pattern='/start', from_users='me'))
+        client.add_event_handler(help_handler, events.NewMessage(pattern='/help', from_users='me'))
+        client.add_event_handler(add_handler, events.NewMessage(pattern='/add', from_users='me'))
+        client.add_event_handler(remove_handler, events.NewMessage(pattern='/remove', from_users='me'))
+        client.add_event_handler(list_handler, events.NewMessage(pattern='/list', from_users='me'))
+        client.add_event_handler(clear_handler, events.NewMessage(pattern='/clear', from_users='me'))
+        client.add_event_handler(contacts_handler, events.NewMessage(pattern='/load_contacts', from_users='me'))
+        client.add_event_handler(group_handler, events.NewMessage(pattern='/load_group', from_users='me'))
+        client.add_event_handler(broadcast_handler, events.NewMessage(pattern='/broadcast', from_users='me'))
+
         if STRING_SESSION:
             await client.start()
         else:
@@ -270,7 +267,8 @@ async def main():
 
 if __name__ == '__main__':
     try:
-        client.loop.run_until_complete(main())
+        asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Bot stopped.")
-
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
