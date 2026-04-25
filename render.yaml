@@ -15,5 +15,4 @@ services:
         sync: false
       - key: STRING_SESSION
         sync: false
-      - key: PORT
-        value: 8080
+

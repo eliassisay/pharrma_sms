@@ -7,6 +7,7 @@ from telethon import TelegramClient, events, errors, types, functions
 from telethon.sessions import StringSession
 from config import API_ID, API_HASH, PHONE_NUMBER, STRING_SESSION
 import database
+import sys
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -241,18 +242,31 @@ def run_flask():
 
 async def main():
     logger.info("Starting Health Check server...")
-    threading.Thread(target=run_flask, daemon=True).start()
-    
-    logger.info("Starting Multi-Sender Userbot...")
-    
-    if not await database.check_connection():
-        logger.critical("Could connect to MongoDB. Please check MONGO_URI.")
-        return
+    try:
+        threading.Thread(target=run_flask, daemon=True).start()
+    except Exception as e:
+        logger.error(f"Failed to start Flask thread: {e}")
 
-    await client.start(phone=PHONE_NUMBER)
-    logger.info("Client connected!")
-    print("\nUserbot is running! Send commands in Saved Messages or your Bot chat.\n")
-    await client.run_until_disconnected()
+    logger.info("Checking MongoDB connection...")
+    if not await database.check_connection():
+        logger.critical("Could not connect to MongoDB. Please check your MONGO_URI and IP whitelist.")
+        sys.exit(1)
+
+    logger.info("Starting Telegram Client...")
+    try:
+        if STRING_SESSION:
+            await client.start()
+        else:
+            logger.error("STRING_SESSION is missing! Cloud deployment requires a string session.")
+            logger.info("Please run 'python generate_session.py' locally to get one.")
+            sys.exit(1)
+            
+        logger.info("Client connected successfully!")
+        print("\nUserbot is running! Send commands in Saved Messages or your Bot chat.\n")
+        await client.run_until_disconnected()
+    except Exception as e:
+        logger.error(f"A critical error occurred during bot startup: {e}")
+        sys.exit(1)
 
 if __name__ == '__main__':
     try:
