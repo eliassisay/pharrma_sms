@@ -11,7 +11,7 @@ API_HASH = os.getenv('API_HASH', '4515566e294d0313e501cf5a08dd1a79')
 PHONE_NUMBER = os.getenv('PHONE_NUMBER', '+251980027967')
 
 # MongoDB Configuration
-MONGO_URI = os.getenv('MONGO_URI', 'mongodb+srv://eliassisaydev_db_user:MZYldEzKCWGutjZq@pharma.ofeigvv.mongodb.net/?appName=pharma')
+MONGO_URI = os.getenv('MONGO_URI', 'mongodb+srv://haymanotgula24_db_user:B4qP0H6VOU4AAnRB@smspharma.wnhrqeh.mongodb.net/?appName=smspharma')
 DB_NAME = os.getenv('DB_NAME', 'telegram_multi_sender')
 
 # Telegram Session Management (Used for cloud deployment)
