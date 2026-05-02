@@ -15,6 +15,7 @@ MONGO_URI = os.getenv('MONGO_URI', 'mongodb+srv://haymanotgula24_db_user:zMgbNMi
 DB_NAME = os.getenv('DB_NAME', 'all_in_one')
 
 # Telegram Session Management (Used for cloud deployment)
-STRING_SESSION = os.getenv('1BJWap1wBu1h4l-4_PmW1gXzE6749bSQ_xgtLm6mEeD8awQUcYWu7F_O7oNHX7VmdTkTOG23f7r2cyISUw8H-XD8StuDQEDe42P2IlIBMyH5VX_wbBDHcUuNctHvIKFdGOP48lQ-gXDb8nI_iMAoEJRm9qf_TK1BlHrkY0MqlJfSrrOMc54EHs_TIqm_2-_KC2BAR2c2pFQMnrp5-es5qvhAd6Cxy2KCe9H0LTOFTrgSgJbCuXc_g_-wdmUUeT19jnpBSW8X9lGEtywCl6RGouls8IrSSJeC5gtKEvdVwG85xrLc-VhC3WF9q6KaDllte-Qn0SNILLBZ0sJyIQeX7rzOht7-hkqo=')
-BOT_TOKEN = os.getenv('BOT_TOKEN', '8724770472:AAEzwjh5s5tbhP9ptZykmxk4NHnpkfdTXds')  # Optional: For running as a bot instead of a userbot
+STRING_SESSION = os.getenv('STRING_SESSION', '1BJWap1wBu1h4l-4_PmW1gXzE6749bSQ_xgtLm6mEeD8awQUcYWu7F_O7oNHX7VmdTkTOG23f7r2cyISUw8H-XD8StuDQEDe42P2IlIBMyH5VX_wbBDHcUuNctHvIKFdGOP48lQ-gXDb8nI_iMAoEJRm9qf_TK1BlHrkY0MqlJfSrrOMc54EHs_TIqm_2-_KC2BAR2c2pFQMnrp5-es5qvhAd6Cxy2KCe9H0LTOFTrgSgJbCuXc_g_-wdmUUeT19jnpBSW8X9lGEtywCl6RGouls8IrSSJeC5gtKEvdVwG85xrLc-VhC3WF9q6KaDllte-Qn0SNILLBZ0sJyIQeX7rzOht7-hkqo=')
+BOT_TOKEN = os.getenv('BOT_TOKEN', '8724770472:AAEzwjh5s5tbhP9ptZykmxk4NHnpkfdTXds')
+OWNER_ID = int(os.getenv('OWNER_ID', '0')) # Set this to your Telegram ID to use the bot mode
 

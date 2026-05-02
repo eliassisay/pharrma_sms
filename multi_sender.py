@@ -6,7 +6,7 @@ import sys
 from flask import Flask
 from telethon import TelegramClient, events, errors, types, functions
 from telethon.sessions import StringSession
-from config import API_ID, API_HASH, PHONE_NUMBER, STRING_SESSION
+from config import API_ID, API_HASH, PHONE_NUMBER, STRING_SESSION, BOT_TOKEN, OWNER_ID
 import database
 
 # Configure logging
@@ -41,6 +41,8 @@ async def get_user_details(client, entity):
     return None, None, None
 
 def is_allowed_chat(event):
+    if BOT_TOKEN:
+        return event.is_private and (event.sender_id == OWNER_ID or OWNER_ID == 0)
     return event.is_private
 
 async def start_handler(event):
@@ -241,21 +243,26 @@ async def main():
         client = TelegramClient(session, API_ID, API_HASH)
         
         # Register Handlers
-        client.add_event_handler(start_handler, events.NewMessage(pattern='/start', from_users='me'))
-        client.add_event_handler(help_handler, events.NewMessage(pattern='/help', from_users='me'))
-        client.add_event_handler(add_handler, events.NewMessage(pattern='/add', from_users='me'))
-        client.add_event_handler(remove_handler, events.NewMessage(pattern='/remove', from_users='me'))
-        client.add_event_handler(list_handler, events.NewMessage(pattern='/list', from_users='me'))
-        client.add_event_handler(clear_handler, events.NewMessage(pattern='/clear', from_users='me'))
-        client.add_event_handler(contacts_handler, events.NewMessage(pattern='/load_contacts', from_users='me'))
-        client.add_event_handler(group_handler, events.NewMessage(pattern='/load_group', from_users='me'))
-        client.add_event_handler(broadcast_handler, events.NewMessage(pattern='/broadcast', from_users='me'))
+        from_me = 'me' if not BOT_TOKEN else None
+        
+        client.add_event_handler(start_handler, events.NewMessage(pattern='/start', from_users=from_me))
+        client.add_event_handler(help_handler, events.NewMessage(pattern='/help', from_users=from_me))
+        client.add_event_handler(add_handler, events.NewMessage(pattern='/add', from_users=from_me))
+        client.add_event_handler(remove_handler, events.NewMessage(pattern='/remove', from_users=from_me))
+        client.add_event_handler(list_handler, events.NewMessage(pattern='/list', from_users=from_me))
+        client.add_event_handler(clear_handler, events.NewMessage(pattern='/clear', from_users=from_me))
+        client.add_event_handler(contacts_handler, events.NewMessage(pattern='/load_contacts', from_users=from_me))
+        client.add_event_handler(group_handler, events.NewMessage(pattern='/load_group', from_users=from_me))
+        client.add_event_handler(broadcast_handler, events.NewMessage(pattern='/broadcast', from_users=from_me))
 
-        if STRING_SESSION:
+        if BOT_TOKEN:
+            logger.info("Logging in as a Bot...")
+            await client.start(bot_token=BOT_TOKEN)
+        elif STRING_SESSION:
+            logger.info("Logging in as a Userbot...")
             await client.start()
         else:
-            logger.error("STRING_SESSION is missing! Cloud deployment requires a string session.")
-            logger.info("Please run 'python generate_session.py' locally to get one.")
+            logger.error("No login credentials found! Set STRING_SESSION or BOT_TOKEN.")
             sys.exit(1)
             
         logger.info("Client connected successfully!")
