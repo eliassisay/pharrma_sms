@@ -19,13 +19,14 @@ session = StringSession(STRING_SESSION) if STRING_SESSION else 'multi_sender_ses
 
 HELP_TEXT = """
 **Multi-Sender Userbot Commands:**
-/add @user1 @user2 12345 - Add users by username or ID
+/add @user1 @user2 12345 - Add users
 /remove @user1 12345 - Remove users
-/list - List selected users
+/list [group_id] - List selected users (optionally by group)
+/groups - Show all groups and their user counts
 /clear - Clear the selection list
-/load_contacts - Add all your personal contacts to the list
+/load_contacts - Add all your personal contacts
 /load_group @group_username - Add members from a group
-/broadcast message - Send message to all. (TIP: Reply to any message with /broadcast to send that specific message/media)
+/broadcast message - Send message to all group by group with progress tracking
 /help - Show this help
 """
 
@@ -99,20 +100,48 @@ async def remove_handler(event):
 
 async def list_handler(event):
     if not is_allowed_chat(event): return
-    users = await database.get_all_users()
-    if not users:
-        return await event.respond("The selection list is empty.")
+    args = event.message.text.split()
     
-    msg = "**Selected Users:**\n"
+    if len(args) > 1:
+        try:
+            group_id = int(args[1])
+            users = await database.get_users_by_group(group_id)
+            title = f"**Users in Group {group_id}:**\n"
+        except ValueError:
+            return await event.respond("Usage: /list [group_id]")
+    else:
+        users = await database.get_all_users()
+        title = "**All Selected Users:**\n"
+
+    if not users:
+        return await event.respond("No users found.")
+    
+    msg = title
     for u in users:
         username = f"(@{u['username']})" if u.get('username') else ""
-        msg += f"- {u.get('name', 'Unknown')} {username} [ID: {u['_id']}]\n"
+        group = f" [G: {u.get('group_id', '?')}]"
+        msg += f"- {u.get('name', 'Unknown')} {username} [ID: {u['_id']}]{group}\n"
     
     if len(msg) > 4000:
         for i in range(0, len(msg), 4000):
             await event.respond(msg[i:i+4000])
     else:
         await event.respond(msg)
+
+async def groups_handler(event):
+    if not is_allowed_chat(event): return
+    stats = await database.get_group_stats()
+    if not stats:
+        return await event.respond("No groups found.")
+    
+    msg = "**Group Statistics:**\n"
+    total_users = 0
+    for s in stats:
+        msg += f"📁 Group {s['_id']}: {s['count']} users\n"
+        total_users += s['count']
+    
+    msg += f"\n**Total Users:** {total_users}"
+    await event.respond(msg)
 
 async def clear_handler(event):
     if not is_allowed_chat(event): return
@@ -165,8 +194,8 @@ async def group_handler(event):
 async def broadcast_handler(event):
     if not is_allowed_chat(event): return
     
-    selected_users = await database.get_all_users()
-    if not selected_users:
+    group_ids = await database.get_group_ids()
+    if not group_ids:
         return await event.respond("Selection list is empty. Add users first!")
     
     reply = await event.get_reply_message()
@@ -178,41 +207,72 @@ async def broadcast_handler(event):
             return await event.respond("Usage: /broadcast <message> OR reply to a message with /broadcast")
         broadcast_msg = text
 
-    confirm = await event.respond(f"🚀 Starting broadcast to {len(selected_users)} users...")
+    total_users = len(await database.get_all_users())
+    status_msg = await event.respond(f"🚀 Starting broadcast to {total_users} users in {len(group_ids)} groups...")
     
     success = 0
     failed = 0
+    processed = 0
     err_logs = []
     
-    for u in selected_users:
-        try:
-            await event.client.send_message(u['_id'], broadcast_msg)
-            success += 1
-            await asyncio.sleep(1.5) 
-        except errors.FloodWaitError as e:
-            logger.warning(f"FloodWait: sleeping for {e.seconds} seconds")
-            await asyncio.sleep(e.seconds)
+    for g_id in group_ids:
+        users = await database.get_users_by_group(g_id)
+        for u in users:
             try:
                 await event.client.send_message(u['_id'], broadcast_msg)
                 success += 1
-            except Exception as e2:
+            except errors.FloodWaitError as e:
+                logger.warning(f"FloodWait: sleeping for {e.seconds} seconds")
+                await asyncio.sleep(e.seconds)
+                try:
+                    await event.client.send_message(u['_id'], broadcast_msg)
+                    success += 1
+                except Exception as e2:
+                    failed += 1
+                    err_logs.append(f"User {u['_id']}: {str(e2)}")
+            except Exception as e:
                 failed += 1
-                err_logs.append(f"User {u['_id']}: {str(e2)}")
-        except Exception as e:
-            failed += 1
-            err_logs.append(f"User {u['_id']}: {str(e)}")
-            logger.error(f"Failed to send to {u['_id']}: {e}")
+                err_logs.append(f"User {u['_id']}: {str(e)}")
+                logger.error(f"Failed to send to {u['_id']}: {e}")
             
+            processed += 1
+            # Update progress every 5 users or at the end of a group
+            if processed % 5 == 0 or processed == total_users:
+                remaining = total_users - processed
+                progress_text = (
+                    f"🚀 **Broadcasting...**\n\n"
+                    f"📊 **Progress:** {processed}/{total_users}\n"
+                    f"✅ **Sent:** {success}\n"
+                    f"❌ **Failed:** {failed}\n"
+                    f"⏳ **Remaining:** {remaining}\n"
+                    f"📁 **Group:** {g_id}/{len(group_ids)}"
+                )
+                try:
+                    await status_msg.edit(progress_text)
+                except Exception: pass
+            
+            await asyncio.sleep(1.2) # General delay to avoid being "stacked"
+            
+        # Small pause between groups
+        if g_id != group_ids[-1]:
+            await asyncio.sleep(3)
+
     preview = "Media/Reply"
     if isinstance(broadcast_msg, str): preview = broadcast_msg
     elif hasattr(broadcast_msg, 'text') and broadcast_msg.text: preview = broadcast_msg.text
 
     await database.log_broadcast(preview, success, failed, err_logs[:10])
     
-    final_report = f"✨ Broadcast Finished!\n✅ Success: {success}\n❌ Failed: {failed}"
+    final_report = (
+        f"✨ **Broadcast Finished!**\n\n"
+        f"📊 **Total Targets:** {total_users}\n"
+        f"✅ **Success:** {success}\n"
+        f"❌ **Failed:** {failed}\n"
+        f"📅 **Groups Processed:** {len(group_ids)}"
+    )
     if failed > 0:
-        final_report += "\nCheck MongoDB logs for details."
-    await confirm.edit(final_report)
+        final_report += "\n\nCheck MongoDB logs for details."
+    await status_msg.edit(final_report)
 
 # --- Minimal Web Server for Health Checks ---
 app = Flask(__name__)
@@ -250,6 +310,7 @@ async def main():
         client.add_event_handler(add_handler, events.NewMessage(pattern='/add', from_users=from_me))
         client.add_event_handler(remove_handler, events.NewMessage(pattern='/remove', from_users=from_me))
         client.add_event_handler(list_handler, events.NewMessage(pattern='/list', from_users=from_me))
+        client.add_event_handler(groups_handler, events.NewMessage(pattern='/groups', from_users=from_me))
         client.add_event_handler(clear_handler, events.NewMessage(pattern='/clear', from_users=from_me))
         client.add_event_handler(contacts_handler, events.NewMessage(pattern='/load_contacts', from_users=from_me))
         client.add_event_handler(group_handler, events.NewMessage(pattern='/load_group', from_users=from_me))

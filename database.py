@@ -43,11 +43,24 @@ async def check_connection():
 
 async def add_user(user_id: int, username: str = None, name: str = None):
     get_db()
-    await users_collection.update_one(
-        {'_id': user_id},
-        {'$set': {'username': username, 'name': name}},
-        upsert=True
-    )
+    # Check if user already exists to preserve their group
+    existing_user = await users_collection.find_one({'_id': user_id})
+    if existing_user:
+        await users_collection.update_one(
+            {'_id': user_id},
+            {'$set': {'username': username, 'name': name}}
+        )
+    else:
+        # Assign new group
+        user_count = await users_collection.count_documents({})
+        group_id = (user_count // 50) + 1
+        await users_collection.insert_one({
+            '_id': user_id,
+            'username': username,
+            'name': name,
+            'group_id': group_id,
+            'added_at': datetime.datetime.utcnow()
+        })
 
 async def remove_user(user_id: int):
     get_db()
@@ -66,9 +79,32 @@ async def get_all_users():
     cursor = users_collection.find({})
     return await cursor.to_list(length=None)
 
+async def get_users_by_group(group_id: int):
+    get_db()
+    cursor = users_collection.find({'group_id': group_id})
+    return await cursor.to_list(length=None)
+
+async def get_group_ids():
+    get_db()
+    return await users_collection.distinct('group_id')
+
+async def get_group_stats():
+    get_db()
+    pipeline = [
+        {'$group': {'_id': '$group_id', 'count': {'$sum': 1}}},
+        {'$sort': {'_id': 1}}
+    ]
+    cursor = users_collection.aggregate(pipeline)
+    return await cursor.to_list(length=None)
+
 async def clear_users():
     get_db()
     await users_collection.delete_many({})
+
+async def clear_all_data():
+    get_db()
+    await users_collection.delete_many({})
+    await logs_collection.delete_many({})
 
 async def log_broadcast(message: str, success_count: int, failed_count: int, errors: list):
     get_db()
